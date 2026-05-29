@@ -1,4 +1,4 @@
-/* 精准控制：只有当侧边栏被 Hover 时，里面的导航项才显示并具备交互响应 */
+/* 核心控制：当侧边栏没有被 hover 时，里面的子元素彻底隐形，防止图标漏出 */
 #sidebar .opacity-0 {
     transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -7,19 +7,20 @@
     opacity: 1 !important;
 }
 
-/* 导航高亮强制覆盖样式（白底主题） */
+/* 侧边栏活动标签高亮样式（优雅乳白底色 + 深色字） */
 .nav-active {
     background-color: #f1f5f9 !important;
     color: #0f172a !important;
     font-weight: 600;
 }
 
-/* 绘图板基础 */
+/* 画布基础指针样式 */
 #paintCanvas {
     cursor: crosshair;
-    touch-action: none;
+    touch-action: none; /* 极其关键：防止移动端手势绘画时整个网页跟着滚动 */
 }
 
+/* 美化侧边栏往期列表的滚动条 */
 #past-terms-list::-webkit-scrollbar {
     width: 4px;
 }
@@ -28,7 +29,7 @@
     border-radius: 2px;
 }
 
-/* 确保看板娘不会阻挡画布最左侧的点击事件 */
+/* 看板娘图层位置调校，确保不挡住画布最左侧的操作 */
 #waifu {
     z-index: 40 !important;
     left: 20px !important;
