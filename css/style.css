@@ -1,30 +1,34 @@
-/* 确保侧边栏在未悬停时彻底隐藏文字，防止溢出换行 */
-.sidebar-text {
-    white-space: nowrap;
-    transition: opacity 0.2s ease;
+/* 精准控制：只有当侧边栏被 Hover 时，里面的导航项才显示并具备交互响应 */
+#sidebar .opacity-0 {
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#sidebar:not(:hover) .sidebar-text {
-    opacity: 0 !important;
-    pointer-events: none;
+#sidebar:hover .opacity-0 {
+    opacity: 1 !important;
 }
 
-/* 美化画布鼠标样式 */
+/* 导航高亮强制覆盖样式（白底主题） */
+.nav-active {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 600;
+}
+
+/* 绘图板基础 */
 #paintCanvas {
     cursor: crosshair;
-    touch-action: none; /* 阻止移动端绘图时页面跟随滚动 */
+    touch-action: none;
 }
 
-/* 自定义滚动条样式 */
 #past-terms-list::-webkit-scrollbar {
     width: 4px;
 }
 #past-terms-list::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: #e2e8f0;
     border-radius: 2px;
 }
 
-/* 看板娘图层层级微调，确保不遮挡画布操作 */
+/* 确保看板娘不会阻挡画布最左侧的点击事件 */
 #waifu {
     z-index: 40 !important;
     left: 20px !important;
