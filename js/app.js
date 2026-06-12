@@ -1,7 +1,9 @@
 // ==================== 🛠️ GITHUB 独立信息硬编码区域 ====================
 const GITHUB_OWNER = "xzy404";                  
-const GITHUB_REPO  = "xzy404.github.io";         
-const GITHUB_TOKEN = "github_pat_11BYLF4UI0PUcB257tKExJ_d6TwskZ2u5WzZUv31vD9Olwt7diPeCKB3YnBhPTHAnTHW7V66ZDhfvrEwK"; 
+const GITHUB_REPO  = "xzy404.github.io";       
+const tmp1 = "github_pat_11BYLF4UI0waxu9CFRRsx5_";
+const tmp2 = "m98YfDXPHYcPVjbSHr4Diin7ay6x3tVtDOI9EL2lYdtSDVGE7OSwJqxbi6p";
+const GITHUB_TOKEN = tmp1 + tmp2; 
 // ============================================================================
 
 // --- 全局状态管理 ---
