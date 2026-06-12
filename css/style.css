@@ -20,7 +20,7 @@
     touch-action: none;
 }
 
-/* 美化侧边栏往期列表的滚动条 */
+/* 美美化往期列表的滚动条 */
 #past-terms-list::-webkit-scrollbar {
     width: 4px;
 }
@@ -29,7 +29,6 @@
     border-radius: 2px;
 }
 
-/* 看板娘图层位置调校，确保不挡住画布最左侧的操作 */
 #waifu {
     z-index: 40 !important;
     left: 20px !important;
