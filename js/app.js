@@ -17,12 +17,14 @@ const state = {
     ]
 };
 
+// 安全剔除Token潜在的首尾空格干扰
+const getCleanToken = () => GITHUB_TOKEN.trim();
+
 // --- 前端 Hash 路由分配系统 ---
 function handleRoute() {
     const hash = window.location.hash || '#/';
     const main = document.getElementById('main-content');
     
-    // 清洗侧边栏样式
     document.querySelectorAll('#sidebar nav a').forEach(a => {
         a.classList.remove('nav-active');
         a.classList.add('text-slate-400');
@@ -136,10 +138,10 @@ function handleLocalImageUpload(event) {
     reader.readAsDataURL(file);
 }
 
-// --- 数据上报：上传到 GitHub Repo ---
+// --- 数据上报：上传到 GitHub ---
 async function uploadToGitHub(isTermDrawing) {
     if (!GITHUB_TOKEN || GITHUB_TOKEN.startsWith("github_pat_请在此替换")) {
-        alert("❌ 上传轴断：请先配置有效的 Token！");
+        alert("❌ 上传中止：请先配置有效的 Token！");
         return;
     }
     const author = prompt("请输入您的竞赛昵称/代号：", "Anonymous_OIer");
@@ -148,8 +150,7 @@ async function uploadToGitHub(isTermDrawing) {
     const base64Data = canvas.toDataURL('image/png').split(',')[1];
     const termId = isTermDrawing ? state.currentMonthId : 0;
     
-    // 对包含特殊字符或中文的作者名进行标准 URL 编码，防止 GitHub API 解析路径失败
-    const safeAuthor = encodeURIComponent(author.trim());
+    const safeAuthor = encodeURIComponent(author.trim().replace(/_/g, '-')); // 规避下划线命名解析冲突
     const filename = `0_${termId}_${safeAuthor}_${Date.now()}.png`;
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
 
@@ -157,22 +158,23 @@ async function uploadToGitHub(isTermDrawing) {
         const res = await fetch(url, {
             method: 'PUT',
             headers: { 
-                'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, // 细粒度 Token 推荐使用 Bearer 规范请求头
-                'Content-Type': 'application/json' 
+                'Authorization': `Bearer ${getCleanToken()}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github+json'
             },
             body: JSON.stringify({ message: `Gallery commit by ${author}`, content: base64Data })
         });
         if(res.ok) {
-            alert("🎉 画作上传成功！已实时同步至 GitHub 数据库。");
+            alert("🎉 画作上传成功！已同步至 GitHub 数据库。");
             if(isTermDrawing) window.location.hash = `#/show/${termId}`;
         } else {
             const errData = await res.json();
-            alert(`❌ 上传失败。原因: ${errData.message || '权限不足'}。请检查 submissions 文件夹是否存在，以及 Token 权限是否赋予了该仓库的 Contents: Read and Write！`);
+            alert(`❌ 上传失败。原因: ${errData.message || '未知'}。请确保 submissions 文件夹已在仓库中创建！`);
         }
     } catch (err) { alert("网络异常，无法连接到 GitHub API 节点。"); }
 }
 
-// --- 视图层：拉取 GitHub 文件列表，解析并渲染展览区 ---
+// --- 视图层：拉取 GitHub 列表并渲染展览区 ---
 async function renderShowPage(container, id) {
     const termObj = state.termsConfig.find(t => t.id === id);
     container.innerHTML = `<div class="text-center py-12 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-xl mb-2"></i><p class="text-xs">正在实时读取并整理 GitHub 仓库的战况排名表...</p></div>`;
@@ -183,7 +185,12 @@ async function renderShowPage(container, id) {
     if (hasValidToken) {
         try {
             const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions`;
-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}` } });
+            const res = await fetch(url, { 
+                headers: { 
+                    'Authorization': `Bearer ${getCleanToken()}`,
+                    'Accept': 'application/vnd.github+json'
+                } 
+            });
             if (res.ok) {
                 const files = await res.json();
                 artworks = files.filter(f => f.name.endsWith('.png')).map(f => {
@@ -200,11 +207,11 @@ async function renderShowPage(container, id) {
         } catch (e) { console.error(e); }
     }
 
-    // 后备 Mock 样例数据
+    // 后备 Mock 真实测试样例数据（点击投票时，如果是 Mock 数据会优雅提示）
     if (artworks.length === 0) {
         artworks = [
-            { filename: '28_3_Alex_1.png', sha: 'm1', votes: 28, termId: 3, author: 'Tourist_Fan', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】区间懒标记大作</text></svg>' },
-            { filename: '51_3_Bob_2.png', sha: 'm2', votes: 51, termId: 3, author: 'LazyTag_Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】满二叉树空间拆分</text></svg>' }
+            { filename: '28_3_Tourist-Fan_111.png', sha: 'mock1', votes: 28, termId: 3, author: 'Tourist-Fan', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【测试样例】区间懒标记大作</text></svg>' },
+            { filename: '51_3_LazyTag-Master_222.png', sha: 'mock2', votes: 51, termId: 3, author: 'LazyTag-Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【测试样例】满二叉树空间拆分</text></svg>' }
         ].filter(art => art.termId === id);
     }
 
@@ -233,7 +240,7 @@ async function renderShowPage(container, id) {
                 </div>
                 <div class="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                     <span class="text-xs font-extrabold text-teal-600">${art.votes} 票</span>
-                    <button onclick="castVote(${id}, '${art.filename}', '${art.sha}')" ${termObj.isLocked ? 'disabled' : ''} class="px-3 py-1.5 text-xs font-bold rounded-lg ${termObj.isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'} transition">
+                    <button onclick="castVote(${id}, '${art.filename}', '${art.sha}', '${art.author}')" ${termObj.isLocked ? 'disabled' : ''} class="px-3 py-1.5 text-xs font-bold rounded-lg ${termObj.isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-teal-600 text-white hover:bg-teal-700'} transition">
                         ${termObj.isLocked ? '已锁定' : '👍 投票'}
                     </button>
                 </div>
@@ -252,7 +259,7 @@ async function renderShowPage(container, id) {
             </div>
             <div class="flex items-center space-x-4">
                 <span class="font-bold text-slate-500 text-sm">${art.votes} 票</span>
-                <button onclick="castVote(${id}, '${art.filename}', '${art.sha}')" ${termObj.isLocked ? 'disabled' : ''} class="px-4 py-1.5 text-xs font-bold rounded-lg ${termObj.isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-900'} transition">
+                <button onclick="castVote(${id}, '${art.filename}', '${art.sha}', '${art.author}')" ${termObj.isLocked ? 'disabled' : ''} class="px-4 py-1.5 text-xs font-bold rounded-lg ${termObj.isLocked ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-800 text-white hover:bg-slate-900'} transition">
                     投票
                 </button>
             </div>
@@ -263,7 +270,7 @@ async function renderShowPage(container, id) {
         <div class="max-w-5xl mx-auto">
             <div class="mb-6">
                 <h1 class="text-3xl font-extrabold text-slate-800">第 ${id} 期展览：${termObj.term}</h1>
-                <p class="text-slate-400 text-xs mt-1">当前状态：${termObj.isLocked ? '🔒 展览期结束，锁定投票机制' : '⚡ 票选火热进行中'}</p>
+                <p class="text-slate-400 text-xs mt-1">当前状态：${termObj.isLocked ? '🔒 展览期结束' : '⚡ 票选火热进行中'}</p>
             </div>
             <div class="flex flex-wrap gap-6 items-end mb-10">${topHtml || '<p class="text-slate-400 italic text-sm">本期暂无选手提交作品</p>'}</div>
             <h3 class="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">📊 更多选手排名</h3>
@@ -272,34 +279,79 @@ async function renderShowPage(container, id) {
     `;
 }
 
-// --- 投票核心（重命名文件） ---
-async function castVote(termId, filename, sha) {
+// --- 核心网络投票逻辑（完美融合 LocalStorage 唯一性防刷锁） ---
+async function castVote(termId, filename, sha, authorName) {
+    if (sha.startsWith("mock")) {
+        alert("💡 提示：当前显示的是本地数据样例，请先通过‘词条绘画区’成功上传一幅真实作品后，再测试 GitHub 联调投票！");
+        return;
+    }
+
+    // 账本隔离标识：期数_作者名
+    const voteKey = `voted_${termId}_${authorName}`;
+    
+    // 1. 本地幂等性鉴权检查
+    if (localStorage.getItem(voteKey)) {
+        alert(`⚠️ 投票拒绝：你本期已经给选手 [ ${authorName} ] 投过票了！你可以继续去给其他选手投票。`);
+        return;
+    }
+
     const parts = filename.replace('.png', '').split('_');
     const newVotes = parseInt(parts[0]) + 1;
     const newFilename = `${newVotes}_${parts[1]}_${parts[2]}_${parts[3]}.png`;
 
     try {
         const getUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
-        const getRes = await fetch(getUrl, { headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}` } });
+        
+        // 核心修正：加入全量 Bearer 鉴权与 API 版本请求头，保障 GET 行为畅通
+        const getRes = await fetch(getUrl, { 
+            headers: { 
+                'Authorization': `Bearer ${getCleanToken()}`,
+                'Accept': 'application/vnd.github+json'
+            } 
+        });
+        
+        if (!getRes.ok) {
+            alert("❌ 无法获取作品源文件，可能该文件在 GitHub 远端已被移位或删除。");
+            return;
+        }
+        
         const fileData = await getRes.json();
         
+        // 步骤一：创建新票数对应的克隆文件
         const putUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${newFilename}`;
         const putRes = await fetch(putUrl, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: `Vote +1`, content: fileData.content })
+            headers: { 
+                'Authorization': `Bearer ${getCleanToken()}`, 
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.github+json'
+            },
+            body: JSON.stringify({ message: `Vote up ${authorName} to ${newVotes}`, content: fileData.content })
         });
 
-        if(putRes.ok) {
+        if (putRes.ok) {
+            // 步骤二：抹除原票数的残存旧文件
             await fetch(getUrl, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: `Clean`, sha: sha })
+                headers: { 
+                    'Authorization': `Bearer ${getCleanToken()}`, 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github+json'
+                },
+                body: JSON.stringify({ message: `Clean link`, sha: sha })
             });
-            alert("🎉 投票成功！");
+
+            // 2. 投票成功，写入浏览器持久化账本锁
+            localStorage.setItem(voteKey, "true");
+
+            alert(`🎉 成功为选手 [ ${authorName} ] 投上宝贵的一票！`);
             renderShowPage(document.getElementById('main-content'), termId);
+        } else {
+            alert("❌ 投票同步失败，请检查 Token 的 Contents 读写写入权限。");
         }
-    } catch(e) { alert("网络传输震荡，投票操作未成功同步至 GitHub 仓库。"); }
+    } catch(e) { 
+        alert("网络高频震荡，未能成功连通 GitHub 核心节点。"); 
+    }
 }
 
 function zoomImage(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').classList.remove('hidden'); }
