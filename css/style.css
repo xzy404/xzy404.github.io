@@ -7,7 +7,7 @@
     opacity: 1 !important;
 }
 
-/* 侧边栏活动标签高亮样式（优雅乳白底色 + 深色字） */
+/* 侧边栏活动标签高亮样式 */
 .nav-active {
     background-color: #f1f5f9 !important;
     color: #0f172a !important;
@@ -17,7 +17,7 @@
 /* 画布基础指针样式 */
 #paintCanvas {
     cursor: crosshair;
-    touch-action: none; /* 极其关键：防止移动端手势绘画时整个网页跟着滚动 */
+    touch-action: none;
 }
 
 /* 美化侧边栏往期列表的滚动条 */
