@@ -8,12 +8,12 @@ const GITHUB_TOKEN = tmp_1 + tmp_2;
 
 // --- 全局状态管理 ---
 const state = {
-    currentTerm: "线段树 (Segment Tree)", 
+    currentTerm: "分块", 
     currentMonthId: 3,                  
     termsConfig: [
-        { id: 1, term: "树状数组 (BIT)", isLocked: true },
-        { id: 2, term: "最短路 (Dijkstra)", isLocked: true },
-        { id: 3, term: "线段树 (Segment Tree)", isLocked: false }
+        { id: 1, term: "线段树", isLocked: true },
+        { id: 2, term: "最短路", isLocked: true },
+        { id: 3, term: "分块", isLocked: false }
     ]
 };
 
