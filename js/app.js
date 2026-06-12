@@ -1,21 +1,17 @@
-// ==================== 🛠️ 请在此处配置您的 GITHUB 独立信息 ====================
-const GITHUB_OWNER = "xzy404";                  // 您的 GitHub 账户名称
-const GITHUB_REPO  = "xzy404.github.io";         // 您的 GitHub Pages 仓库名称
-const GITHUB_TOKEN = "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"; 
+// ==================== 🛠️ GITHUB 独立信息硬编码区域 ====================
+const GITHUB_OWNER = "xzy404";                  
+const GITHUB_REPO  = "xzy404.github.io";         
+const GITHUB_TOKEN = "github_pat_11BYLF4UI0PUcB257tKExJ_d6TwskZ2u5WzZUv31vD9Olwt7diPeCKB3YnBhPTHAnTHW7V66ZDhfvrEwK"; 
 // ============================================================================
 
 // --- 全局状态管理 ---
 const state = {
-    currentTerm: "线段树 (Segment Tree)", // 当前月份进行的 OI 词条
-    currentMonthId: 6,                  // 当前月期数 ID
-    // 词条配置文件清单
+    currentTerm: "线段树 (Segment Tree)", 
+    currentMonthId: 3,                  
     termsConfig: [
-        { id: 1, term: "xzy", isLocked: true },
-        { id: 2, term: "XPating", isLocked: true },
-        { id: 3, term: "洛谷", isLocked: true },
-        { id: 4, term: "CodeForces", isLocked: true },
-        { id: 5, term: "AtCoder", isLocked: true },
-        { id: 6, term: "线段树 (Segment Tree)", isLocked: false }
+        { id: 1, term: "树状数组 (BIT)", isLocked: true },
+        { id: 2, term: "最短路 (Dijkstra)", isLocked: true },
+        { id: 3, term: "线段树 (Segment Tree)", isLocked: false }
     ]
 };
 
@@ -55,7 +51,7 @@ function renderSidebarTerms() {
 // --- 视图层：构建画布页面骨架 ---
 function renderCanvasPage(container, title, subtitle, showImageUpload) {
     container.innerHTML = `
-        <div class="max-w-4xl mx-auto animate-fade-in">
+        <div class="max-w-4xl mx-auto">
             <h1 class="text-3xl font-extrabold text-slate-800">${title}</h1>
             <p class="text-slate-500 mt-2 mb-6 text-sm">${subtitle}</p>
             
@@ -93,7 +89,7 @@ function renderCanvasPage(container, title, subtitle, showImageUpload) {
     initCanvasEngine();
 }
 
-// --- 核心画布双端（鼠标/触摸）绘图引擎 ---
+// --- 核心画布双端绘图引擎 ---
 let canvas, ctx, isDrawing = false;
 function initCanvasEngine() {
     canvas = document.getElementById('paintCanvas');
@@ -116,11 +112,9 @@ function initCanvasEngine() {
     const drawing = (e) => { if (!isDrawing) return; const p = getPos(e); ctx.lineWidth = document.getElementById('brushSize').value; ctx.strokeStyle = document.getElementById('brushColor').value; ctx.lineTo(p.x, p.y); ctx.stroke(); };
     const stopDraw = () => isDrawing = false;
 
-    // 适配 PC 端
     canvas.addEventListener('mousedown', startDraw);
     canvas.addEventListener('mousemove', drawing);
     canvas.addEventListener('mouseup', stopDraw);
-    // 适配移动端/平板
     canvas.addEventListener('touchstart', startDraw);
     canvas.addEventListener('touchmove', drawing);
     canvas.addEventListener('touchend', stopDraw);
@@ -140,34 +134,40 @@ function handleLocalImageUpload(event) {
     reader.readAsDataURL(file);
 }
 
-// --- 数据上报：将画作 Base64 推送到 GitHub Repo ---
+// --- 数据上报：上传到 GitHub Repo ---
 async function uploadToGitHub(isTermDrawing) {
     if (!GITHUB_TOKEN || GITHUB_TOKEN.startsWith("github_pat_请在此替换")) {
-        alert("❌ 上传中止：请先在 js/app.js 文件的第 4 行硬编码填入您的 GitHub 访问 Token 凭证！");
+        alert("❌ 上传轴断：请先配置有效的 Token！");
         return;
     }
     const author = prompt("请输入您的竞赛昵称/代号：", "Anonymous_OIer");
     if (!author) return;
 
     const base64Data = canvas.toDataURL('image/png').split(',')[1];
-    const termId = isTermDrawing ? state.currentMonthId : 0; // 0期 代表公共画板
-    // 命名约束：票数_期数_作者名_时间戳.png
-    const filename = `0_${termId}_${encodeURIComponent(author)}_${Date.now()}.png`;
+    const termId = isTermDrawing ? state.currentMonthId : 0;
+    
+    // 对包含特殊字符或中文的作者名进行标准 URL 编码，防止 GitHub API 解析路径失败
+    const safeAuthor = encodeURIComponent(author.trim());
+    const filename = `0_${termId}_${safeAuthor}_${Date.now()}.png`;
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
 
     try {
         const res = await fetch(url, {
             method: 'PUT',
-            headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, // 细粒度 Token 推荐使用 Bearer 规范请求头
+                'Content-Type': 'application/json' 
+            },
             body: JSON.stringify({ message: `Gallery commit by ${author}`, content: base64Data })
         });
         if(res.ok) {
-            alert("🎉 画作上传成功！已实时存入 GitHub 仓库中。");
+            alert("🎉 画作上传成功！已实时同步至 GitHub 数据库。");
             if(isTermDrawing) window.location.hash = `#/show/${termId}`;
         } else {
-            alert("❌ 上传失败，请检查代码中硬编码的 Token 是否正确，并确认其拥有仓库写入权限。");
+            const errData = await res.json();
+            alert(`❌ 上传失败。原因: ${errData.message || '权限不足'}。请检查 submissions 文件夹是否存在，以及 Token 权限是否赋予了该仓库的 Contents: Read and Write！`);
         }
-    } catch (err) { alert("网络异常，无法成功连接到 GitHub API"); }
+    } catch (err) { alert("网络异常，无法连接到 GitHub API 节点。"); }
 }
 
 // --- 视图层：拉取 GitHub 文件列表，解析并渲染展览区 ---
@@ -181,7 +181,7 @@ async function renderShowPage(container, id) {
     if (hasValidToken) {
         try {
             const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions`;
-            const res = await fetch(url, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}` } });
             if (res.ok) {
                 const files = await res.json();
                 artworks = files.filter(f => f.name.endsWith('.png')).map(f => {
@@ -195,32 +195,30 @@ async function renderShowPage(container, id) {
                     };
                 }).filter(art => art.termId === id);
             }
-        } catch (e) { console.error("API 读取失败，转入备用模拟预览模式:", e); }
+        } catch (e) { console.error(e); }
     }
 
-    // 后备 Mock 样例数据（防止初始化阶段仓库为空时页面显得空旷）
+    // 后备 Mock 样例数据
     if (artworks.length === 0) {
         artworks = [
             { filename: '28_3_Alex_1.png', sha: 'm1', votes: 28, termId: 3, author: 'Tourist_Fan', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】区间懒标记大作</text></svg>' },
-            { filename: '51_3_Bob_2.png', sha: 'm2', votes: 51, termId: 3, author: 'LazyTag_Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】满二叉树空间拆分</text></svg>' },
-            { filename: '14_3_Cyan_3.png', sha: 'm3', votes: 14, termId: 3, author: 'PushDown_Void', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】动态开点线段树</text></svg>' }
+            { filename: '51_3_Bob_2.png', sha: 'm2', votes: 51, termId: 3, author: 'LazyTag_Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【样例】满二叉树空间拆分</text></svg>' }
         ].filter(art => art.termId === id);
     }
 
-    // 按票数逆序排序
     artworks.sort((a, b) => b.votes - a.votes);
     const topThree = artworks.slice(0, 3);
     const remaining = artworks.slice(3);
 
-    // 组装前三名经典领奖台布局 (2, 1, 3)
     let topHtml = '';
     const podiumOrder = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
     podiumOrder.forEach(art => {
         const rank = artworks.indexOf(art) + 1;
         let borderClass = 'border-slate-200 h-44';
-        let badge = `🥉 季军 (Rank 3)`;
+        let badge = `环境测试数据`;
         if(rank === 1) { borderClass = 'border-amber-400 scale-105 h-52 bg-amber-50/20'; badge = `🥇 冠军 (Rank 1)`; }
         if(rank === 2) { borderClass = 'border-slate-300 h-48'; badge = `🥈 亚军 (Rank 2)`; }
+        if(rank === 3) { borderClass = 'border-orange-200 h-44'; badge = `🥉 季军 (Rank 3)`; }
 
         topHtml += `
             <div class="flex-1 min-w-[260px] bg-white rounded-2xl shadow-sm border-2 ${borderClass} flex flex-col justify-between overflow-hidden transition transform hover:-translate-y-1">
@@ -241,7 +239,6 @@ async function renderShowPage(container, id) {
         `;
     });
 
-    // 剩余选手链式列表排布
     let listHtml = remaining.map((art, i) => `
         <div class="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200/60 hover:shadow-md transition">
             <div class="flex items-center space-x-4">
@@ -263,7 +260,7 @@ async function renderShowPage(container, id) {
     container.innerHTML = `
         <div class="max-w-5xl mx-auto">
             <div class="mb-6">
-                <h1 class="text-3xl font-extrabold text-slate-800">第 ${id} 期大佬展览：${termObj.term}</h1>
+                <h1 class="text-3xl font-extrabold text-slate-800">第 ${id} 期展览：${termObj.term}</h1>
                 <p class="text-slate-400 text-xs mt-1">当前状态：${termObj.isLocked ? '🔒 展览期结束，锁定投票机制' : '⚡ 票选火热进行中'}</p>
             </div>
             <div class="flex flex-wrap gap-6 items-end mb-10">${topHtml || '<p class="text-slate-400 italic text-sm">本期暂无选手提交作品</p>'}</div>
@@ -273,47 +270,39 @@ async function renderShowPage(container, id) {
     `;
 }
 
-// --- 数据流重操纵：投票时利用 API 重命名文件实现票数 +1 ---
+// --- 投票核心（重命名文件） ---
 async function castVote(termId, filename, sha) {
-    if (!GITHUB_TOKEN || GITHUB_TOKEN.startsWith("github_pat_请在此替换")) {
-        alert("❌ 投票中止：请联系管理员先在后台填入有效的 Token 代码凭证。");
-        return;
-    }
     const parts = filename.replace('.png', '').split('_');
     const newVotes = parseInt(parts[0]) + 1;
     const newFilename = `${newVotes}_${parts[1]}_${parts[2]}_${parts[3]}.png`;
 
     try {
         const getUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
-        const getRes = await fetch(getUrl, { headers: { 'Authorization': `token ${GITHUB_TOKEN}` } });
+        const getRes = await fetch(getUrl, { headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}` } });
         const fileData = await getRes.json();
         
-        // 步骤一：创建全新加票后的新文件
         const putUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${newFilename}`;
         const putRes = await fetch(putUrl, {
             method: 'PUT',
-            headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: `Vote up file to ${newVotes}`, content: fileData.content })
+            headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: `Vote +1`, content: fileData.content })
         });
 
         if(putRes.ok) {
-            // 步骤二：抹除原子集旧文件
             await fetch(getUrl, {
                 method: 'DELETE',
-                headers: { 'Authorization': `token ${GITHUB_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: `Delete outdated file`, sha: sha })
+                headers: { 'Authorization': `Bearer ${GITHUB_TOKEN.trim()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `Clean`, sha: sha })
             });
-            alert("🎉 投票上报成功！");
+            alert("🎉 投票成功！");
             renderShowPage(document.getElementById('main-content'), termId);
         }
     } catch(e) { alert("网络传输震荡，投票操作未成功同步至 GitHub 仓库。"); }
 }
 
-// --- 全局 LightBox 灯箱放大组件交互 ---
 function zoomImage(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').classList.remove('hidden'); }
 function closeLightbox() { document.getElementById('lightbox').classList.add('hidden'); }
 
-// --- 初始化生命周期挂载 ---
 window.addEventListener('hashchange', handleRoute);
 window.addEventListener('load', () => { 
     handleRoute(); 
