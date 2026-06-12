@@ -32,7 +32,8 @@ function handleRoute() {
 
     if (hash === '#/') {
         document.getElementById('nav-home').classList.add('nav-active');
-        renderCanvasPage(main, "🌌 公共画板 (首页)", "自由创作娱乐区，画完即可保存至 GitHub，无主题限制！", false);
+        // 首页文案微调，体现接力覆盖机制
+        renderCanvasPage(main, "🌌 公共画板 (首页)", "自由创作娱乐区，画完保存将实时覆盖首页，所有人刷新可见最新状态！", false);
     } else if (hash === '#/draw') {
         document.getElementById('nav-draw').classList.add('nav-active');
         renderCanvasPage(main, `🎨 本期词条同步创作：${state.currentTerm}`, "发挥想象力，用画笔将这个硬核 OI 算法词条具象化吧！", true);
@@ -59,7 +60,12 @@ function renderCanvasPage(container, title, subtitle, showImageUpload) {
             <h1 class="text-3xl font-extrabold text-slate-800">${title}</h1>
             <p class="text-slate-500 mt-2 mb-6 text-sm">${subtitle}</p>
             
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 relative">
+                <div id="canvas-loading" class="absolute inset-0 bg-white/80 z-10 flex flex-col items-center justify-center rounded-xl hidden">
+                    <i class="fa-solid fa-spinner fa-spin text-teal-600 text-2xl mb-2"></i>
+                    <span class="text-xs text-slate-500 font-medium">正在从 GitHub 同步最新画布状态...</span>
+                </div>
+
                 <canvas id="paintCanvas" width="800" height="500" class="w-full bg-white border border-slate-100 rounded-xl shadow-inner block"></canvas>
                 
                 <div class="mt-6 flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200/60">
@@ -83,24 +89,29 @@ function renderCanvasPage(container, title, subtitle, showImageUpload) {
                         </label>
                         ` : ''}
                         <button onclick="uploadToGitHub(${showImageUpload})" class="px-5 py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:opacity-90 text-white text-xs font-bold rounded-lg shadow-sm transition">
-                            🚀 上传到 GitHub 仓库
+                            🚀 上传并同步画布
                         </button>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    initCanvasEngine();
+    // 如果 showImageUpload 为 false，说明当前处于不需要上传本地图片的【首页公共画板】，传入 true 触发历史画面同步
+    initCanvasEngine(!showImageUpload);
 }
 
 // --- 核心画布双端绘图引擎 ---
 let canvas, ctx, isDrawing = false;
-function initCanvasEngine() {
+function initCanvasEngine(loadLatestGlobal) {
     canvas = document.getElementById('paintCanvas');
     if (!canvas) return;
     ctx = canvas.getContext('2d');
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // 默认给画布底色填充纯白，防止图层叠加或导出时出现黑色透明底
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const getPos = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -122,9 +133,65 @@ function initCanvasEngine() {
     canvas.addEventListener('touchstart', startDraw);
     canvas.addEventListener('touchmove', drawing);
     canvas.addEventListener('touchend', stopDraw);
+
+    // 【新增逻辑】如果是首页，实时去 GitHub 获取最新的一张首页历史画作渲染上屏
+    if (loadLatestGlobal) {
+        loadLatestPublicCanvas();
+    }
 }
 
-function clearCanvas() { if(confirm("确定要清空画布重新画吗？")) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+// --- 【新增函数】首页载入时，自动寻找最新的公共画布图层 ---
+async function loadLatestPublicCanvas() {
+    const hasValidToken = GITHUB_TOKEN && !GITHUB_TOKEN.startsWith("github_pat_请在此替换");
+    if (!hasValidToken) return;
+
+    const loader = document.getElementById('canvas-loading');
+    if (loader) loader.classList.remove('hidden');
+
+    try {
+        const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions`;
+        const res = await fetch(url, { 
+            headers: { 
+                'Authorization': `Bearer ${getCleanToken()}`,
+                'Accept': 'application/vnd.github+json'
+            } 
+        });
+        
+        if (res.ok) {
+            const files = await res.json();
+            // 筛选出所有属于公共画板（期数为 0）的 png 图片
+            const publicBoards = files.filter(f => f.name.endsWith('.png')).map(f => {
+                const parts = f.name.replace('.png', '').split('_');
+                return {
+                    termId: parseInt(parts[1]) || 0,
+                    timestamp: parseInt(parts[3]) || 0,
+                    downloadUrl: f.download_url
+                };
+            }).filter(art => art.termId === 0);
+
+            // 如果有历史提交记录，找出时间戳最大的那张（即最后上传的那张画）
+            if (publicBoards.length > 0) {
+                publicBoards.sort((a, b) => b.timestamp - a.timestamp);
+                const latestImgUrl = publicBoards[0].downloadUrl;
+
+                // 将该图绘制到 Canvas 画布中作为基础底图
+                const img = new Image();
+                img.crossOrigin = "anonymous"; // 规避跨域画布污染限制
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    if (loader) loader.classList.add('hidden');
+                };
+                img.onerror = () => { if (loader) loader.classList.add('hidden'); };
+                img.src = latestImgUrl;
+                return;
+            }
+        }
+    } catch (e) { console.error("读取公共画布历史失败:", e); }
+    if (loader) loader.classList.add('hidden');
+}
+
+function clearCanvas() { if(confirm("确定要清空画布重新画吗？")) { ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); } }
 
 function handleLocalImageUpload(event) {
     const file = event.target.files[0];
@@ -150,7 +217,7 @@ async function uploadToGitHub(isTermDrawing) {
     const base64Data = canvas.toDataURL('image/png').split(',')[1];
     const termId = isTermDrawing ? state.currentMonthId : 0;
     
-    const safeAuthor = encodeURIComponent(author.trim().replace(/_/g, '-')); // 规避下划线命名解析冲突
+    const safeAuthor = encodeURIComponent(author.trim().replace(/_/g, '-')); 
     const filename = `0_${termId}_${safeAuthor}_${Date.now()}.png`;
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
 
@@ -165,8 +232,13 @@ async function uploadToGitHub(isTermDrawing) {
             body: JSON.stringify({ message: `Gallery commit by ${author}`, content: base64Data })
         });
         if(res.ok) {
-            alert("🎉 画作上传成功！已同步至 GitHub 数据库。");
-            if(isTermDrawing) window.location.hash = `#/show/${termId}`;
+            alert("🎉 画作上传成功！已成功同步至全球网络，所有人刷新首页均可见此状态。");
+            if(isTermDrawing) {
+                window.location.hash = `#/show/${termId}`;
+            } else {
+                // 如果是首页，上传成功后本地重新触发一次底图加载，保障图层握手状态更新
+                loadLatestPublicCanvas();
+            }
         } else {
             const errData = await res.json();
             alert(`❌ 上传失败。原因: ${errData.message || '未知'}。请确保 submissions 文件夹已在仓库中创建！`);
@@ -207,11 +279,11 @@ async function renderShowPage(container, id) {
         } catch (e) { console.error(e); }
     }
 
-    // 后备 Mock 真实测试样例数据（点击投票时，如果是 Mock 数据会优雅提示）
+    // 后备 Mock 真实测试样例数据
     if (artworks.length === 0) {
         artworks = [
             { filename: '28_3_Tourist-Fan_111.png', sha: 'mock1', votes: 28, termId: 3, author: 'Tourist-Fan', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【测试样例】区间懒标记大作</text></svg>' },
-            { filename: '51_3_LazyTag-Master_222.png', sha: 'mock2', votes: 51, termId: 3, author: 'LazyTag-Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【测试样例】满二叉树空间拆分</text></svg>' }
+            { filename: '51_3_LazyTag-Master_222.png', sha: 'mock2', votes: 51, termId: 3, author: 'LazyTag-Master', img: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><rect width="100%" height="100%" fill="%23f8fafc"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8">【测试样例】分块大小 $\\sqrt{n}$ 概念图</text></svg>' }
         ].filter(art => art.termId === id);
     }
 
@@ -279,17 +351,14 @@ async function renderShowPage(container, id) {
     `;
 }
 
-// --- 核心网络投票逻辑（完美融合 LocalStorage 唯一性防刷锁） ---
+// --- 核心网络投票逻辑 ---
 async function castVote(termId, filename, sha, authorName) {
     if (sha.startsWith("mock")) {
         alert("💡 提示：当前显示的是本地数据样例，请先通过‘词条绘画区’成功上传一幅真实作品后，再测试 GitHub 联调投票！");
         return;
     }
 
-    // 账本隔离标识：期数_作者名
     const voteKey = `voted_${termId}_${authorName}`;
-    
-    // 1. 本地幂等性鉴权检查
     if (localStorage.getItem(voteKey)) {
         alert(`⚠️ 投票拒绝：你本期已经给选手 [ ${authorName} ] 投过票了！你可以继续去给其他选手投票。`);
         return;
@@ -301,8 +370,6 @@ async function castVote(termId, filename, sha, authorName) {
 
     try {
         const getUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${filename}`;
-        
-        // 核心修正：加入全量 Bearer 鉴权与 API 版本请求头，保障 GET 行为畅通
         const getRes = await fetch(getUrl, { 
             headers: { 
                 'Authorization': `Bearer ${getCleanToken()}`,
@@ -317,7 +384,6 @@ async function castVote(termId, filename, sha, authorName) {
         
         const fileData = await getRes.json();
         
-        // 步骤一：创建新票数对应的克隆文件
         const putUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/submissions/${newFilename}`;
         const putRes = await fetch(putUrl, {
             method: 'PUT',
@@ -330,7 +396,6 @@ async function castVote(termId, filename, sha, authorName) {
         });
 
         if (putRes.ok) {
-            // 步骤二：抹除原票数的残存旧文件
             await fetch(getUrl, {
                 method: 'DELETE',
                 headers: { 
@@ -341,9 +406,7 @@ async function castVote(termId, filename, sha, authorName) {
                 body: JSON.stringify({ message: `Clean link`, sha: sha })
             });
 
-            // 2. 投票成功，写入浏览器持久化账本锁
             localStorage.setItem(voteKey, "true");
-
             alert(`🎉 成功为选手 [ ${authorName} ] 投上宝贵的一票！`);
             renderShowPage(document.getElementById('main-content'), termId);
         } else {
